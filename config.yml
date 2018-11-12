@@ -2,17 +2,18 @@ variables: secrets.yml
 schedules:
 ##### YOUR TORRENT CLIENT SHOULD RUN THIS COMMAND AFTER EVERY DOWNLOAD: PATH_TO_flexget/bin/flexget execute --tasks find-* move-*
 ##### Alternatively uncomment this task to process downloaded files every 30min.
-#  - tasks: [ 'find-*', 'move-*']
-#    interval:
-#      minutes: 30
+  - tasks: [ 'find-*', 'move-*']
+    interval:
+      minutes: 15,45
 ##### Every day at 2AM, check nextep to search (necessary if you added a new show to the list but have already watched it partly) and find subtitles attempt #2 (without original name). 
   - tasks: ['*-nextep', get-subtitles]
     schedule:
-      hour:  2
+       minute: 0,30
+#      hour:  2
 ##### Twice a day between 2AM and 7AM: scan existing files, fill queue, check the feeds for latest episodes, discover missing episodes.
   - tasks: ['purge-*', 'populate-*', 'fill-*', '*-manual', '*-rss', '*-discover']
     schedule:
-      hour: '2-7/2'
+      hour: '*/2'
 ##### Weekly cleanup of Transmission, Trakt TVshows list (fully watched && ended = delete from list) and harddrive.
   - tasks: ['clean-*']
     interval:
