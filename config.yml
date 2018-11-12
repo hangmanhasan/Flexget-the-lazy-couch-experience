@@ -36,14 +36,14 @@ templates:
         propers: 48 hours
         specials: no
         season_packs: 3
-#        tracking: backfill
+        tracking: backfill
     content_size:
-      min: 100
+      min: 300
     content_filter:
       require:
         - '*.mkv'
         - '*.mp4'
-
+        
 
 ##### Movies config#
   movies-HQ:
@@ -98,6 +98,7 @@ templates:
       reject:
         - '*.rar'
         - '*.zip'
+        
 
 
 ##### ADVANCED SETTINGS #####
@@ -141,20 +142,21 @@ templates:
 
 ##### Common torrents config#
   torrents:
+  
     torrent_alive:
       min_seeds: 3
       reject_for: 15 minutes
-    magnets: no
+    magnets: yes
     # Might need to disable if you are getting errors connecting to https sources
     # Can remove if you upgrade to python 2.7.9+ or install requests[security]
-    verify_ssl_certificates: no
+ #   verify_ssl_certificates: no
     domain_delay:
       thepiratebay.se: 10 seconds
       thepiratebay.org: 10 seconds
       limetorrents: 3 seconds
       anidex.info: 3 seconds
       bt-chat.com: 1 seconds
-      ezrss.it: 1 seconds
+      eztv.re: 1 seconds
       showrss.info: 2 seconds
       torlock.eu: 1 seconds
       torrenticity.com: 1 seconds
@@ -175,6 +177,8 @@ templates:
       content_filename: "{{tvdb_series_name|escape|replace('&#39;', '')|pathscrub}} - {{series_id}}{% if tvdb_ep_name|default(False) %} - {{tvdb_ep_name|pathscrub}}{% endif %}{% if quality|default(False) %} - [{{quality}}]{% endif %}"
       path: "/{? folder.root ?}{? folder.downseries ?}{{tvdb_series_name|default(series_name)|pathscrub}}/"
 
+
+
 ##### Transmission movies config#
   transmission-movies:
     transmission:
@@ -186,13 +190,15 @@ templates:
       path: "/{? folder.root ?}{? folder.downmovies ?}{{movie_name|pathscrub}}"
 
 ##### Pushbullet config#
-#  pushbullet:
-#    notify:
-#      entries:
-#        title: "[flexget] {{task}}"
-#        message: "{{title}}"
-#        via:
-#          - pushbullet:
+  pushbullet:
+    notify:
+      entries:
+        title: "[flexget] {{task}}"
+        message: "{{title}}"
+        what: failed
+        via:
+          - pushbullet:
+              api_key: "{? pushbullet.api ?}"
 #              api_key: "{? pushbullet.api ?}"
 
 ##### Disable builtins for some tasks#
@@ -344,26 +350,30 @@ tasks:
       - reject
       - torrents
       - transmission-series
+      - pushbullet
     inputs:
-      - rss: http://showrss.info/user/USERID.rss?magnets=true&namespaces=true&name=null&quality=anyhd&re=yes
-      - rss: https://eztv.ag/ezrss.xml
-      - rss: https://rarbg.to/rssdd.php?category=1;18;41;49
+      - rss: http://showrss.info/user/192744.rss?magnets=true&namespaces=true&name=null&quality=anyhd&re=yes
+      - rss: https://eztv.re/ezrss.xml
+      - rss: http://zamunda.net/rss.php?cat=25,7,33&passkey=8d30f7c2fa41f3f04c057fe7f7d3d7e3&file=.xml
       - rss: 
           url: https://zooqle.com/search?q=%2A+category%3ATV&fmt=rss
           title: 'torrent:fileName'
-      - rss: https://www.limetorrents.cc/rss/20/
+      - rss: https://www.limetorrents.info/rss/20/
+#      - rss:https://yts.am/rss/0/1080p/all/0
 
       
 
 ##### Discover and download season packs# Please uncomment `backfill` if you need Flexget to download as much as old episodes as it can find. Do the same in series-discover-seasons task and series template.
   download-seasons-discover:
     priority: 8
+    cfscraper: yes
     template:
       - series
       - reject
       - torrents
       - transmission-series
       - series-metainfo
+      - pushbullet
     #season lookup not supported by thetvdb
     thetvdb_lookup: no
     magnets: yes
@@ -384,11 +394,12 @@ tasks:
         - rarbg:
             category: [1, 18, 41, 49]
         - search_rss: https://torrentz2.eu/feed?f=\{{search_term}}
-
+     
 
 ##### Discover and download older episodes# Please uncomment `tracking: backfill` if you need Flexget to download as much as old episodes as it can find. Do the same in series-discover-seasons task and series template.
   download-series-discover:
     priority: 9
+    cfscraper: yes
     template:
       - series
       - reject
@@ -403,8 +414,8 @@ tasks:
       release_estimations: strict
       interval: 15 minutes
       what:
-        - next_series_episodes: yes
-#            backfill: yes
+        - next_series_episodes: yes        
+       #            backfill: yes
       from:
         - piratebay:
             category: highres tv
@@ -413,6 +424,7 @@ tasks:
         - rarbg:
             category: [1, 18, 41, 49]
         - search_rss: https://torrentz2.eu/feed?f=\{{search_term}}
+         
 
 ########## MOVIES ##########
 
@@ -505,11 +517,13 @@ tasks:
           account: "{? trakt.account ?}"
           list: "{? trakt.movies ?}"
           type: movies
+    
 
 
 ##### Discover and download NQ movies (fullHD min 2GB), if the movie is not recent#
   download-movies-NQ-discover:
     priority: 15
+    cfscraper: yes
     template:
       - movies-NQ
       - reject
@@ -541,11 +555,13 @@ tasks:
           account: "{? trakt.account ?}"
           list: "{? trakt.movies ?}"
           type: movies
+          
 
 
 ##### Discover and download lower quality/bitrate movies (1-8GB 720p), if the movie is not recent#
   download-movies-LQ-discover:
     priority: 16
+    cfscraper: yes
     template:
       - movies-LQ
       - reject
@@ -556,7 +572,7 @@ tasks:
       - "/{? folder.root ?}{? folder.movies ?}"
     magnets: yes
     convert_magnet:
-      timeout: 120 seconds
+      timeout: 4 minutes
       force: yes
     seen: local
     discover:
@@ -577,7 +593,7 @@ tasks:
           account: "{? trakt.account ?}"
           list: "{? trakt.movies ?}"
           type: movies
-
+    
 
 ########## SUBTITLES (attempt 1/2) ##########
 
@@ -595,8 +611,9 @@ tasks:
     seen: local
     subliminal:
       languages:
-        - eng
-      exact_match: yes
+        - tur
+        - tr
+      exact_match: no
       single: no
       providers: [opensubtitles, addic7ed, tvsubtitles, podnapisi]
       authentication:
@@ -622,8 +639,9 @@ tasks:
     seen: local
     subliminal:
       languages:
-        - eng
-      exact_match: yes
+        - tur
+        - tr
+      exact_match: no
       single: no
       providers: [opensubtitles, addic7ed, tvsubtitles, podnapisi]
       authentication:
@@ -661,7 +679,7 @@ tasks:
     kodi_library:
       action: scan
       category: video
-      url: http://192.168.1.1
+      url: http://192.168.1.103
       port: 8080
     list_add:
       - subtitle_list:
@@ -782,7 +800,7 @@ tasks:
     kodi_library:
       action: scan
       category: video
-      url: http://192.168.1.1
+      url: http://192.168.1.103
       port: 8080
     list_add:
       - subtitle_list:
@@ -810,8 +828,9 @@ tasks:
             list: subtitles
     subliminal:
       languages:
-        - eng
-      exact_match: yes
+        - tur
+        - tr
+      exact_match: no
       single: no
       providers: [opensubtitles, addic7ed, tvsubtitles, podnapisi]
       authentication:
@@ -854,23 +873,23 @@ tasks:
           type: shows
           
 ##### Remove watched seasons from drive#          
-  clean-old-seasons:
-    priority: 53
-    template:
-      - disable-seen-retry
-      - series-metainfo
-    entry_list: trakt-series-begin
-    accept_all: yes
-    if:
-      - series_season == 1 or series_episode == 1: reject
-      - series_season > 1:
-          set:
-            to_remove: "S{{(series_season-1)|pad(2)}}"
-    exec:
-      on_output:
-        for_accepted: find "/{? folder.root ?}{? folder.series ?}{{tvdb_series_name|escape|replace('&#39;', '')}}" -type d -name "{{to_remove}}" -exec rm -r '{}' \;
-    kodi_library:
-      action: clean
-      category: video
-      url: http://192.168.1.1
-      port: 8080    
+#  clean-old-seasons:
+#    priority: 53
+#    template:
+#      - disable-seen-retry
+#      - series-metainfo
+#    entry_list: trakt-series-begin
+#    accept_all: yes
+#    if:
+#      - series_season == 1 or series_episode == 1: reject
+#      - series_season > 1:
+#          set:
+#            to_remove: "S{{(series_season-1)|pad(2)}}"
+#    exec:
+#      on_output:
+#        for_accepted: find "/{? folder.root ?}{? folder.series ?}{{tvdb_series_name|escape|replace('&#39;', '')}}" -type d -name "{{to_remove}}" -exec rm -r '{}' \;
+#    kodi_library:
+#      action: clean
+#      category: video
+#      url: http://192.168.1.103
+#      port: 8080    
