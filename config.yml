@@ -35,16 +35,36 @@ templates:
         quality: webrip+ <=1080p !10bit xvid+
         propers: 48 hours
         specials: no
-        season_packs: 3
+        season_packs: yes
         tracking: backfill
     content_size:
-      min: 300
+      min: 350
     content_filter:
       require:
         - '*.mkv'
         - '*.mp4'
         
-
+##### Anime series config
+#
+  anime-series:
+    include: anime.yml
+    configure_series:
+      from:
+        entry_list: myanimelist-series
+      settings:
+        identified_by: sequence
+        quality: 720p !10bit !h265
+        special_ids:
+          - OVA
+          
+##### Anime movies config
+#
+  anime-movies:
+    quality: 720p+ !10bit !h265
+    content_size:
+      min: 700
+      max: 10000
+          
 ##### Movies config#
   movies-HQ:
     tmdb_lookup: yes
@@ -67,8 +87,8 @@ templates:
     movie_list: trakt-movies
     quality: 720p webdl+ !10bit !h265
     content_size:
-      min: 900
-      max: 8000
+      min: 500
+      max: 3000
 
 ##### Transmission config#
   transmission-anchors:
@@ -100,7 +120,16 @@ templates:
         - '*.zip'
         
 
-
+##### Anime rejections
+#
+  anime-reject:
+    regexp:
+      reject:
+        - \bdub\b
+        - \bhard(subs|subbed)?\b
+        - \bpv\b
+        - \b60fps\b
+        
 ##### ADVANCED SETTINGS #####
 ##### Global config#
   global:
@@ -142,7 +171,6 @@ templates:
 
 ##### Common torrents config#
   torrents:
-  
     torrent_alive:
       min_seeds: 3
       reject_for: 15 minutes
@@ -189,6 +217,32 @@ templates:
       content_filename: "{{tmdb_name|pathscrub}} ({{tmdb_year}}){% if quality|default(False) %} - [{{quality}}]{% endif %}{% if release_group|default(False) %} - [{{release_group}}]{% endif %}"
       path: "/{? folder.root ?}{? folder.downmovies ?}{{movie_name|pathscrub}}"
 
+##### Transmission anime config
+#
+  transmission-anime:
+    transmission:
+      <<: *transmission-settings
+      main_file_only: yes
+      path: "/{? folder.root ?}{? folder.downanime ?}{{title}}/"
+
+##### Transmission anime series config
+#
+  transmission-anime-series:
+    transmission:
+      <<: *transmission-settings
+      main_file_only: yes
+      content_filename: "{{series_name}} - ep{{series_id}} - [{{quality}}]"
+      path: "/{? folder.root ?}{? folder.downanime ?}{{series_name|pathscrub}}/"
+      
+##### Transmission anime movies config
+#
+  transmission-anime-movies:
+    transmission:
+      <<: *transmission-settings
+      main_file_only: yes
+      content_filename: "{{regexp}} - ep1 - [{{quality}}]"
+      path: "/{? folder.root ?}{? folder.downanime ?}{{regexp}}/"
+      
 ##### Pushbullet config#
   pushbullet:
     notify:
@@ -425,12 +479,164 @@ tasks:
             category: [1, 18, 41, 49]
         - search_rss: https://torrentz2.eu/feed?f=\{{search_term}}
          
+########## ANIME ##########
+
+##### Fetch, format and output myanimelist series list to a custom entry list
+#
+  fill-anime-series-list:
+    priority: 11
+    template:
+      - disable-seen-retry
+    metainfo_series: yes
+    list_clear:
+      what:
+        - entry_list: myanimelist-series
+    domain_delay:
+      myanimelist.net: 5 seconds
+    myanimelist:
+      user_id: "{? myanimelist.id ?}"
+      list: both
+      type: shows
+    accept_all: yes
+    set:
+      title: "{{myanimelist_name|re_replace('[-/:;.★](?=[a-zA-Z])', ' ')|re_replace('[:;](?![a-zA-Z])|[`´()]|TV|', '')|re_replace('Season ', 'S')|re_replace('  +', ' ')}}"
+    list_add:
+      - entry_list: myanimelist-series
+      
+##### Fill the movie queue with movies from trakt list
+#
+  fill-anime-movies-queue:
+    priority: 13
+    domain_delay:
+      myanimelist.net: 5 seconds
+    myanimelist:
+      user_id: "{? myanimelist.id ?}"
+      list: both
+      type: movies
+    accept_all: yes
+    set:
+      title: "{{myanimelist_name|re_replace('[-/:;.★](?=[a-zA-Z])', ' ')|re_replace('[:;](?![a-zA-Z])|[`´()]', '')|re_replace('  +', ' ')}}"
+    list_add:
+      - regexp_list: myanimelist-movies
+
+##### Download anime from manually downloaded torrents
+#
+  download-anime-manual:
+    priority: 14
+    template:
+      - disable-seen-retry
+      - transmission-anime
+      - pushbullet
+    filesystem:
+      path: "/{? folder.root ?}{? folder.downanime ?}"
+      mask: '*.torrent'
+    accept_all: yes
+    exec:
+      on_output:
+        for_accepted: rm -f "{{location}}"
+
+##### Download anime from RSS feed from verified groups
+#
+  download-anime-series-rss:
+    priority: 15
+    template:
+      - anime-series
+      - anime-reject
+      - torrents
+      - transmission-anime-series
+      - pushbullet
+    inputs:
+      - rss: https://nyaa.si/?page=rss&c=1_2&f=2
+
+##### Download anime from RSS feed from all groups
+#
+  download-anime-series-all-rss:
+    priority: 16
+    delay: 2 days
+    template:
+      - anime-series
+      - anime-reject
+      - torrents
+      - transmission-anime-series
+      - pushbullet
+    inputs:
+      - rss: https://nyaa.si/?page=rss&c=1_2
+      - rss: https://anidex.info/rss/?cat=1&lang_id=1
+
+
+##### Discover and download anime from verified groups
+#
+  download-anime-series-discover:
+    priority: 18
+    template:
+      - anime-series
+      - anime-reject
+      - torrents
+      - transmission-anime-series
+      - pushbullet
+    metainfo_series: yes
+    discover:
+      release_estimations: ignore
+      interval: 15 minutes
+      what:
+        - next_series_episodes:
+            from_start: yes
+            backfill: yes
+      from:
+        - search_rss: https://nyaa.si/?page=rss&c=1_2&f=2&q=\{{search_term}}
+
+
+##### Discover and download anime from all groups
+#
+  download-anime-series-all-discover:
+    priority: 19
+    delay: 2 days
+    template:
+      - anime-series
+      - anime-reject
+      - torrents
+      - transmission-anime-series
+      - pushbullet
+    metainfo_series: yes
+    discover:
+      release_estimations: ignore
+      interval: 15 minutes
+      what:
+        - next_series_episodes:
+            from_start: yes
+            backfill: yes
+      from:
+        - search_rss: https://nyaa.si/?page=rss&c=1_2&q=\{{search_term}}
+        - search_rss: https://anidex.info/rss/?cat=1&lang_id=1&q=\{{search_term}}
+
+
+##### Discover and download anime movies
+#
+  download-anime-movies-discover:
+    priority: 20
+    template:
+      - anime-movies
+      - anime-reject
+      - torrents
+      - transmission-anime-movies
+      - pushbullet
+    discover:
+      release_estimations: ignore
+      interval: 15 minutes
+      what:
+        - regexp_list: myanimelist-movies
+      from:
+        - search_rss: https://nyaa.si/?page=rss&c=1_2&q=\{{search_term}}
+        - search_rss: https://anidex.info/rss/?cat=1&lang_id=1&q=\{{search_term}}
+    list_match:
+      from:
+        - regexp_list: myanimelist-movies
 
 ########## MOVIES ##########
 
 ##### Remove manually downloaded movies from the movie queue and trakt list#
   purge-movies-queue:
-    priority: 11
+    priority: 31
     template:
       - disable-seen-retry
       - movies-metainfo
@@ -450,7 +656,7 @@ tasks:
 
 ##### Fill the movie queue with movies from trakt list#
   fill-movies-queue:
-    priority: 12
+    priority: 32
     trakt_list:
       account: "{? trakt.account ?}"
       list: "{? trakt.movies ?}"
@@ -463,11 +669,12 @@ tasks:
 
 ##### Download movies manually downloaded torrents#
   download-movies-manual:
-    priority: 13
+    priority: 34
     template:
       - disable-seen-retry
       - movies-metainfo
       - transmission-movies
+      - pushbullet
     filesystem:
       path: "/{? folder.root ?}{? folder.downmovies ?}"
       mask: '*.torrent'
@@ -485,7 +692,7 @@ tasks:
 
 ##### Discover and download 1080p movies with good bitrate (min. 8GB)#
   download-movies-HQ-discover:
-    priority: 14
+    priority: 37
     template:
       - movies-HQ
       - reject
@@ -522,13 +729,14 @@ tasks:
 
 ##### Discover and download NQ movies (fullHD min 2GB), if the movie is not recent#
   download-movies-NQ-discover:
-    priority: 15
+    priority: 38
     cfscraper: yes
     template:
       - movies-NQ
       - reject
       - torrents
       - transmission-movies
+      - pushbullet
     exists_movie:
       - "/{? folder.root ?}{? folder.downmovies ?}"
       - "/{? folder.root ?}{? folder.movies ?}"
@@ -560,13 +768,14 @@ tasks:
 
 ##### Discover and download lower quality/bitrate movies (1-8GB 720p), if the movie is not recent#
   download-movies-LQ-discover:
-    priority: 16
+    priority: 39
     cfscraper: yes
     template:
       - movies-LQ
       - reject
       - torrents
       - transmission-movies
+      - pushbullet
     exists_movie:
       - "/{? folder.root ?}{? folder.downmovies ?}"
       - "/{? folder.root ?}{? folder.movies ?}"
@@ -655,7 +864,7 @@ tasks:
 
 ##########      LIBRARY     ##########
   move-series:
-    priority: 31
+    priority: 41
     template:
       - disable-seen-retry
       - series-metainfo
@@ -690,6 +899,32 @@ tasks:
       on_exit:
         phase: find "/{? folder.root ?}{? folder.downseries ?}"* -type d -empty -delete
 
+##### Move anime from downloads folder to respective folders
+#
+  move-anime:
+    priority: 42
+    template:
+      - disable-seen-retry
+      - series-guessit
+    filesystem:
+      path: "/{? folder.root ?}{? folder.downanime ?}"
+      recursive: yes
+      retrieve: files
+      regexp: '.*\.(avi|mkv|mp4)$'
+    metainfo_series: yes
+    accept_all: yes
+    move:
+      to: "/{? folder.root ?}{? folder.anime ?}{{series_name|default(title)|pathscrub}}/"
+      clean_source: 50
+    exec:
+      allow_background: yes
+      on_exit:
+        phase:
+          - find "/{? folder.root ?}{? folder.downanime ?}"* -type d -empty -delete
+### REMOVE THE LINES BELOW IF YOU DONT WANT TO RENAME ANIME WITH THE EXTERNAL SCRIPT
+          - "{? script.animerenamer ?}"
+      on_output:
+        for_accepted: echo "{{location}}" >> "{? list.animerename ?}"
 
 
 ##### First add the downloaded series a list, this allows us to solve issues with files that have incorrect filenames. 
@@ -772,7 +1007,7 @@ tasks:
 
 ##### Move movies from downloads folder to the movies folder, along with possible subtitles and adding the files to the subtitle queue#
   move-movies:
-    priority: 36
+    priority: 43
     template:
       - disable-seen-retry
       - movies-metainfo
@@ -816,7 +1051,7 @@ tasks:
 
 ##### Download subtitles for the previously queued files#
   get-subtitles:
-    priority: 40
+    priority: 45
     template:
       - disable-seen-retry
     subtitle_list:
@@ -829,8 +1064,7 @@ tasks:
     subliminal:
       languages:
         - tur
-        - tr
-      exact_match: no
+      exact_match: yes
       single: no
       providers: [opensubtitles, addic7ed, tvsubtitles, podnapisi]
       authentication:
@@ -857,6 +1091,7 @@ tasks:
     template:
       - disable-seen-retry
       - series-metainfo
+      - pushbullet
     trakt_lookup:
       account: "{? trakt.account ?}"
       username: "{? trakt.account ?}"    
